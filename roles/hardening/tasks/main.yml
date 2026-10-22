@@ -1,0 +1,61 @@
+---
+- name: Preflight checks
+  ansible.builtin.import_tasks: preflight.yml
+  tags: [always]
+
+- name: Packages and automatic updates
+  ansible.builtin.import_tasks: packages.yml
+  tags: [packages]
+
+- name: Login banners
+  ansible.builtin.import_tasks: banners.yml
+  tags: [banners]
+
+- name: SSH server
+  ansible.builtin.import_tasks: ssh.yml
+  tags: [ssh]
+
+- name: Firewall
+  ansible.builtin.import_tasks: firewall.yml
+  when: hardening_firewall | bool
+  tags: [firewall]
+
+- name: fail2ban
+  ansible.builtin.import_tasks: fail2ban.yml
+  when: hardening_fail2ban | bool
+  tags: [fail2ban]
+
+- name: Kernel parameters
+  ansible.builtin.import_tasks: sysctl.yml
+  when: hardening_sysctl | bool
+  tags: [sysctl]
+
+- name: Kernel modules
+  ansible.builtin.import_tasks: kernel_modules.yml
+  tags: [kernel_modules]
+
+- name: Filesystem
+  ansible.builtin.import_tasks: filesystem.yml
+  tags: [filesystem]
+
+- name: Accounts and authentication
+  ansible.builtin.import_tasks: accounts.yml
+  tags: [accounts]
+
+- name: Services and AppArmor
+  ansible.builtin.import_tasks: services.yml
+  tags: [services]
+
+- name: Audit daemon
+  ansible.builtin.import_tasks: auditd.yml
+  when: hardening_auditd | bool
+  tags: [auditd]
+
+- name: Logging
+  ansible.builtin.import_tasks: logging.yml
+  tags: [logging]
+
+- name: File integrity monitoring
+  ansible.builtin.import_tasks: aide.yml
+  when: hardening_aide | bool
+  tags: [aide]

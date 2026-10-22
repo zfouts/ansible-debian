@@ -1,0 +1,6 @@
+---
+- name: Harden Debian hosts
+  hosts: debian
+  become: true
+  roles:
+    - role: hardening

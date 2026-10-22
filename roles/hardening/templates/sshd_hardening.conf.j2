@@ -1,0 +1,45 @@
+# {{ ansible_managed }}
+# Takes precedence over /etc/ssh/sshd_config, which Includes this directory first.
+
+Port {{ hardening_ssh_port }}
+
+# Authentication
+PermitRootLogin {{ hardening_ssh_permit_root_login }}
+PubkeyAuthentication yes
+PasswordAuthentication {{ 'yes' if hardening_ssh_password_authentication | bool else 'no' }}
+KbdInteractiveAuthentication {{ 'yes' if hardening_ssh_password_authentication | bool else 'no' }}
+PermitEmptyPasswords no
+HostbasedAuthentication no
+IgnoreRhosts yes
+PermitUserEnvironment no
+UsePAM yes
+MaxAuthTries {{ hardening_ssh_max_auth_tries }}
+LoginGraceTime {{ hardening_ssh_login_grace_time }}
+{% if hardening_ssh_allow_users | length > 0 %}
+AllowUsers {{ hardening_ssh_allow_users | join(' ') }}
+{% endif %}
+{% if hardening_ssh_allow_groups | length > 0 %}
+AllowGroups {{ hardening_ssh_allow_groups | join(' ') }}
+{% endif %}
+
+# Sessions
+MaxSessions {{ hardening_ssh_max_sessions }}
+MaxStartups 10:30:60
+ClientAliveInterval {{ hardening_ssh_client_alive_interval }}
+ClientAliveCountMax {{ hardening_ssh_client_alive_count_max }}
+
+# Forwarding
+AllowTcpForwarding {{ 'yes' if hardening_ssh_allow_tcp_forwarding | bool else 'no' }}
+AllowAgentForwarding {{ 'yes' if hardening_ssh_allow_agent_forwarding | bool else 'no' }}
+X11Forwarding {{ 'yes' if hardening_ssh_x11_forwarding | bool else 'no' }}
+PermitTunnel no
+GatewayPorts no
+
+# Cryptography
+KexAlgorithms {{ hardening_ssh_effective_kex | join(',') }}
+Ciphers {{ hardening_ssh_effective_ciphers | join(',') }}
+MACs {{ hardening_ssh_effective_macs | join(',') }}
+
+# Logging and banner
+LogLevel VERBOSE
+Banner /etc/issue.net

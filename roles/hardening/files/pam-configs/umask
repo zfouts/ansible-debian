@@ -1,0 +1,6 @@
+Name: Set the session umask from /etc/login.defs (pam_umask)
+Default: yes
+Priority: 0
+Session-Type: Additional
+Session:
+	optional			pam_umask.so

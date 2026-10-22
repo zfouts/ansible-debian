@@ -1,0 +1,32 @@
+---
+# Both handlers listen on "Reload sshd" and run in this order, so a broken
+# combined config fails the play instead of reaching the running daemon.
+- name: Validate the full sshd configuration
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+  listen: Reload sshd
+
+- name: Reload the ssh service
+  ansible.builtin.systemd_service:
+    name: ssh
+    state: reloaded
+  listen: Reload sshd
+
+- name: Restart fail2ban
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    state: restarted
+
+- name: Load audit rules
+  ansible.builtin.command: augenrules --load
+  when: "'enabled 2' not in hardening_audit_status.stdout"
+  changed_when: true
+
+- name: Update GRUB
+  ansible.builtin.command: update-grub
+  changed_when: true
+
+- name: Restart journald
+  ansible.builtin.systemd_service:
+    name: systemd-journald
+    state: restarted

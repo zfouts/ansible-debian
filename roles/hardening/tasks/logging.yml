@@ -1,0 +1,21 @@
+---
+- name: Create the journald drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/journald.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Keep the journal on disk and compressed
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/50-hardening.conf
+    content: |
+      # Managed by Ansible
+      [Journal]
+      Storage={{ 'persistent' if hardening_journald_persistent | bool else 'auto' }}
+      Compress=yes
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart journald

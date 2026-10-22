@@ -1,0 +1,60 @@
+---
+- name: Mount /dev/shm with nodev, nosuid and noexec
+  ansible.posix.mount:
+    path: /dev/shm
+    src: tmpfs
+    fstype: tmpfs
+    opts: defaults,nodev,nosuid,noexec
+    state: mounted
+  when: hardening_dev_shm_noexec | bool
+
+- name: Check which sensitive files exist
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop: "{{ hardening_file_permissions }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: hardening_sensitive_files
+
+- name: Tighten permissions on sensitive files
+  ansible.builtin.file:
+    path: "{{ item.item.path }}"
+    owner: root
+    group: "{{ item.item.group | default('root') }}"
+    mode: "{{ item.item.mode }}"
+  loop: "{{ hardening_sensitive_files.results | selectattr('stat.exists') }}"
+  loop_control:
+    label: "{{ item.item.path }}"
+
+- name: Disable core dumps
+  when: hardening_disable_core_dumps | bool
+  block:
+    - name: Set a hard core size limit of zero
+      ansible.builtin.copy:
+        dest: /etc/security/limits.d/10-hardening.conf
+        content: |
+          # Managed by Ansible
+          * hard core 0
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Create the systemd-coredump drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/coredump.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Stop systemd-coredump from storing dumps
+      ansible.builtin.copy:
+        dest: /etc/systemd/coredump.conf.d/hardening.conf
+        content: |
+          # Managed by Ansible
+          [Coredump]
+          Storage=none
+          ProcessSizeMax=0
+        owner: root
+        group: root
+        mode: "0644"

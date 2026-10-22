@@ -1,0 +1,53 @@
+---
+# Ownership and modes enforced on files that exist on the host.
+hardening_file_permissions:
+  - { path: /etc/passwd, mode: "0644" }
+  - { path: /etc/passwd-, mode: "0644" }
+  - { path: /etc/group, mode: "0644" }
+  - { path: /etc/group-, mode: "0644" }
+  - { path: /etc/shadow, mode: "0640", group: shadow }
+  - { path: /etc/shadow-, mode: "0640", group: shadow }
+  - { path: /etc/gshadow, mode: "0640", group: shadow }
+  - { path: /etc/gshadow-, mode: "0640", group: shadow }
+  - { path: /etc/crontab, mode: "0600" }
+  - { path: /etc/cron.hourly, mode: "0700" }
+  - { path: /etc/cron.daily, mode: "0700" }
+  - { path: /etc/cron.weekly, mode: "0700" }
+  - { path: /etc/cron.monthly, mode: "0700" }
+  - { path: /etc/cron.d, mode: "0700" }
+
+# Syscalls watched by the audit rules, per CPU architecture and ABI. Names
+# differ between architectures (aarch64 only has the *at variants), and
+# auditctl rejects the whole rule if one name is unknown.
+hardening_audit_syscalls:
+  x86_64:
+    b64:
+      time_change: [adjtimex, settimeofday, clock_settime]
+      system_locale: [sethostname, setdomainname]
+      perm_mod: [chmod, fchmod, fchmodat, chown, fchown, fchownat, lchown,
+                 setxattr, lsetxattr, fsetxattr, removexattr, lremovexattr, fremovexattr]
+      access: [creat, open, openat, open_by_handle_at, truncate, ftruncate]
+      delete: [unlink, unlinkat, rename, renameat, renameat2]
+      mounts: [mount, umount2]
+      modules: [init_module, finit_module, delete_module]
+    b32:
+      time_change: [adjtimex, settimeofday, clock_settime, stime]
+      system_locale: [sethostname, setdomainname]
+      perm_mod: [chmod, fchmod, fchmodat, chown, fchown, fchownat, lchown,
+                 chown32, fchown32, lchown32,
+                 setxattr, lsetxattr, fsetxattr, removexattr, lremovexattr, fremovexattr]
+      access: [creat, open, openat, open_by_handle_at, truncate, ftruncate,
+               truncate64, ftruncate64]
+      delete: [unlink, unlinkat, rename, renameat, renameat2]
+      mounts: [mount, umount, umount2]
+      modules: [init_module, finit_module, delete_module]
+  aarch64:
+    b64:
+      time_change: [adjtimex, settimeofday, clock_settime]
+      system_locale: [sethostname, setdomainname]
+      perm_mod: [fchmod, fchmodat, fchown, fchownat,
+                 setxattr, lsetxattr, fsetxattr, removexattr, lremovexattr, fremovexattr]
+      access: [openat, open_by_handle_at, truncate, ftruncate]
+      delete: [unlinkat, renameat, renameat2]
+      mounts: [mount, umount2]
+      modules: [init_module, finit_module, delete_module]

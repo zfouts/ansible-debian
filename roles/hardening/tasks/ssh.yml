@@ -1,0 +1,53 @@
+---
+- name: Install the OpenSSH server
+  ansible.builtin.apt:
+    name: openssh-server
+
+- name: List the algorithms supported by the installed OpenSSH
+  ansible.builtin.command: ssh -Q {{ item }}
+  loop: [kex, cipher, mac]
+  changed_when: false
+  check_mode: false
+  register: hardening_ssh_supported
+
+- name: Keep only the preferred algorithms this OpenSSH supports
+  ansible.builtin.set_fact:
+    hardening_ssh_effective_kex: "{{ hardening_ssh_kex_algorithms | select('in', hardening_ssh_supported.results[0].stdout_lines) | list }}"
+    hardening_ssh_effective_ciphers: "{{ hardening_ssh_ciphers | select('in', hardening_ssh_supported.results[1].stdout_lines) | list }}"
+    hardening_ssh_effective_macs: "{{ hardening_ssh_macs | select('in', hardening_ssh_supported.results[2].stdout_lines) | list }}"
+
+- name: Assert at least one algorithm of each kind is left
+  ansible.builtin.assert:
+    that:
+      - hardening_ssh_effective_kex | length > 0
+      - hardening_ssh_effective_ciphers | length > 0
+      - hardening_ssh_effective_macs | length > 0
+    fail_msg: None of the configured SSH algorithms are supported by this OpenSSH.
+    quiet: true
+
+- name: Make sure sshd_config reads the drop-in directory
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^Include\s+/etc/ssh/sshd_config\.d/\*\.conf'
+    line: Include /etc/ssh/sshd_config.d/*.conf
+    insertbefore: BOF
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload sshd
+
+# sshd uses the first value it reads for each keyword, and drop-ins are read in
+# lexical order, so "00-" wins over e.g. cloud-init's 50-cloud-init.conf.
+- name: Install the SSH hardening drop-in
+  ansible.builtin.template:
+    src: sshd_hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/00-hardening.conf
+    owner: root
+    group: root
+    mode: "0600"
+    validate: /usr/sbin/sshd -t -f %s
+  notify: Reload sshd
+
+- name: Make sure sshd is enabled and running
+  ansible.builtin.systemd_service:
+    name: ssh
+    enabled: true
+    state: started

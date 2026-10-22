@@ -1,0 +1,73 @@
+## {{ ansible_managed }}
+## Based on the CIS Debian Linux Benchmark. Search with: ausearch -k <key>
+{% set syscalls = hardening_audit_syscalls.get(ansible_facts['architecture'], {}) %}
+{% set auid = '-F auid>=1000 -F auid!=unset' %}
+
+## Time changes
+{% for abi, s in syscalls.items() %}
+-a always,exit -F arch={{ abi }} -S {{ s.time_change | join(',') }} -k time-change
+{% endfor %}
+-w /etc/localtime -p wa -k time-change
+
+## Users and groups
+-w /etc/group -p wa -k identity
+-w /etc/passwd -p wa -k identity
+-w /etc/gshadow -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/security/opasswd -p wa -k identity
+
+## Hostname and network configuration
+{% for abi, s in syscalls.items() %}
+-a always,exit -F arch={{ abi }} -S {{ s.system_locale | join(',') }} -k system-locale
+{% endfor %}
+-w /etc/issue -p wa -k system-locale
+-w /etc/issue.net -p wa -k system-locale
+-w /etc/hosts -p wa -k system-locale
+-w /etc/hostname -p wa -k system-locale
+-w /etc/network/ -p wa -k system-locale
+
+## AppArmor policy
+-w /etc/apparmor/ -p wa -k MAC-policy
+-w /etc/apparmor.d/ -p wa -k MAC-policy
+
+## Logins and sessions
+-w /var/log/lastlog -p wa -k logins
+-w /run/faillock -p wa -k logins
+{% for result in hardening_audit_login_dbs.results if result.stat.exists %}
+-w {{ result.item }}/ -p wa -k logins
+{% endfor %}
+-w /run/utmp -p wa -k session
+-w /var/log/wtmp -p wa -k session
+-w /var/log/btmp -p wa -k session
+
+## Privilege escalation
+-w /etc/sudoers -p wa -k scope
+-w /etc/sudoers.d/ -p wa -k scope
+-w {{ hardening_sudo_logfile }} -p wa -k sudo_log_file
+
+## Permission and ownership changes by users
+{% for abi, s in syscalls.items() %}
+-a always,exit -F arch={{ abi }} -S {{ s.perm_mod | join(',') }} {{ auid }} -k perm_mod
+{% endfor %}
+
+## Denied file access by users
+{% for abi, s in syscalls.items() %}
+-a always,exit -F arch={{ abi }} -S {{ s.access | join(',') }} -F exit=-EACCES {{ auid }} -k access
+-a always,exit -F arch={{ abi }} -S {{ s.access | join(',') }} -F exit=-EPERM {{ auid }} -k access
+{% endfor %}
+
+## File deletion and renames by users
+{% for abi, s in syscalls.items() %}
+-a always,exit -F arch={{ abi }} -S {{ s.delete | join(',') }} {{ auid }} -k delete
+{% endfor %}
+
+## Mounts by users
+{% for abi, s in syscalls.items() %}
+-a always,exit -F arch={{ abi }} -S {{ s.mounts | join(',') }} {{ auid }} -k mounts
+{% endfor %}
+
+## Kernel modules
+{% for abi, s in syscalls.items() %}
+-a always,exit -F arch={{ abi }} -S {{ s.modules | join(',') }} -k kernel_modules
+{% endfor %}
+-w /usr/bin/kmod -p x -k kernel_modules

@@ -1,0 +1,6 @@
+# {{ ansible_managed }}
+# root is never locked out (even_deny_root is not set).
+deny = {{ hardening_faillock_deny }}
+fail_interval = {{ hardening_faillock_fail_interval }}
+unlock_time = {{ hardening_faillock_unlock_time }}
+audit

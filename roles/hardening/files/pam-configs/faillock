@@ -1,0 +1,6 @@
+Name: Lock accounts after repeated authentication failures (pam_faillock)
+Default: yes
+Priority: 0
+Auth-Type: Primary
+Auth:
+	[default=die]			pam_faillock.so authfail

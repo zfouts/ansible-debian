@@ -1,0 +1,35 @@
+---
+- name: Install UFW
+  ansible.builtin.apt:
+    name: ufw
+
+# SSH is allowed before the default policy and the firewall are switched on,
+# so the current session is never cut off.
+- name: Allow SSH
+  community.general.ufw:
+    rule: "{{ 'limit' if hardening_firewall_ssh_rate_limit | bool else 'allow' }}"
+    port: "{{ hardening_ssh_port | string }}"
+    proto: tcp
+    comment: SSH
+
+- name: Allow additional inbound ports
+  community.general.ufw:
+    rule: allow
+    port: "{{ item.port | string }}"
+    proto: "{{ item.proto | default('tcp') }}"
+    from_ip: "{{ item.from | default('any') }}"
+    comment: "{{ item.comment | default(omit) }}"
+  loop: "{{ hardening_firewall_allowed_ports }}"
+
+- name: Deny inbound and allow outbound traffic by default
+  community.general.ufw:
+    direction: "{{ item.direction }}"
+    default: "{{ item.policy }}"
+  loop:
+    - { direction: incoming, policy: deny }
+    - { direction: outgoing, policy: allow }
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+    logging: low

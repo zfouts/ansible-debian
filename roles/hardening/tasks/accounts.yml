@@ -1,0 +1,118 @@
+---
+- name: Set password aging and umask defaults for new accounts
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^{{ item.key }}\s'
+    line: "{{ item.key }}\t{{ item.value }}"
+  loop:
+    - { key: PASS_MAX_DAYS, value: "{{ hardening_password_max_days }}" }
+    - { key: PASS_MIN_DAYS, value: "{{ hardening_password_min_days }}" }
+    - { key: PASS_WARN_AGE, value: "{{ hardening_password_warn_age }}" }
+    - { key: UMASK, value: "{{ hardening_umask }}" }
+
+# login.defs UMASK only reaches sessions through pam_umask, which Debian 13
+# enables by default and Debian 12 does not.
+- name: Check whether pam_umask is active
+  ansible.builtin.command: grep -c pam_umask.so /etc/pam.d/common-session
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  register: hardening_umask_active
+
+- name: Enable pam_umask
+  when: hardening_umask_active.stdout | int == 0
+  block:
+    - name: Install the pam_umask pam-auth-update profile
+      ansible.builtin.copy:
+        src: pam-configs/umask
+        dest: /usr/share/pam-configs/umask
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Enable the pam_umask profile
+      ansible.builtin.command: pam-auth-update --enable umask
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      changed_when: true
+
+# --- Password quality --------------------------------------------------------
+# The package registers pam_pwquality in common-password via pam-auth-update.
+- name: Install libpam-pwquality
+  ansible.builtin.apt:
+    name: libpam-pwquality
+
+- name: Create the pwquality drop-in directory
+  ansible.builtin.file:
+    path: /etc/security/pwquality.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Set password quality requirements
+  ansible.builtin.template:
+    src: pwquality.conf.j2
+    dest: /etc/security/pwquality.conf.d/50-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+# --- Account lockout ---------------------------------------------------------
+- name: Lock accounts after repeated authentication failures
+  when: hardening_faillock | bool
+  block:
+    - name: Configure pam_faillock
+      ansible.builtin.template:
+        src: faillock.conf.j2
+        dest: /etc/security/faillock.conf
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install the pam_faillock pam-auth-update profiles
+      ansible.builtin.copy:
+        src: "pam-configs/{{ item }}"
+        dest: "/usr/share/pam-configs/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: [faillock, faillock_notify]
+      register: hardening_faillock_profiles
+
+    - name: Check whether pam_faillock is active
+      ansible.builtin.command: grep -c pam_faillock.so /etc/pam.d/common-auth
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      register: hardening_faillock_active
+
+    - name: Enable the pam_faillock profiles
+      ansible.builtin.command: pam-auth-update --enable faillock faillock_notify
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+      when: hardening_faillock_profiles is changed or hardening_faillock_active.stdout | int == 0
+      changed_when: true
+
+# --- su and sudo -------------------------------------------------------------
+- name: Restrict su to members of {{ hardening_su_group }}
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/su
+    regexp: '^#?\s*auth\s+required\s+pam_wheel\.so(\s+use_uid)?(\s+group=\S+)?\s*$'
+    line: "auth       required   pam_wheel.so use_uid group={{ hardening_su_group }}"
+  when: hardening_restrict_su | bool
+
+- name: Check whether sudo is installed
+  ansible.builtin.stat:
+    path: /etc/sudoers.d
+  register: hardening_sudoers_d
+
+- name: Run sudo commands in a pseudo-terminal and log them
+  ansible.builtin.template:
+    src: sudoers.j2
+    dest: /etc/sudoers.d/50-hardening
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+  when: hardening_sudoers_d.stat.exists

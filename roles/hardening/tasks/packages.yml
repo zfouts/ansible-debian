@@ -1,0 +1,45 @@
+---
+- name: Update the apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Upgrade installed packages
+  ansible.builtin.apt:
+    upgrade: safe
+  when: hardening_upgrade_packages | bool
+
+- name: Remove legacy network services and clients
+  ansible.builtin.apt:
+    name: "{{ hardening_remove_packages }}"
+    state: absent
+    purge: true
+
+- name: Configure automatic security updates
+  when: hardening_unattended_upgrades | bool
+  block:
+    - name: Install unattended-upgrades
+      ansible.builtin.apt:
+        name:
+          - unattended-upgrades
+          - apt-listchanges
+
+    - name: Enable the periodic apt jobs
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          // Managed by Ansible
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+          APT::Periodic::AutocleanInterval "7";
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Configure unattended-upgrades
+      ansible.builtin.template:
+        src: unattended-upgrades.conf.j2
+        dest: /etc/apt/apt.conf.d/52unattended-upgrades-local
+        owner: root
+        group: root
+        mode: "0644"

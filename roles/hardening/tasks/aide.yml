@@ -1,0 +1,15 @@
+---
+- name: Install AIDE
+  ansible.builtin.apt:
+    name:
+      - aide
+      - aide-common
+
+# Scans the whole filesystem; the daily check timer shipped with aide-common
+# compares against this baseline afterwards.
+- name: Build the initial AIDE database
+  ansible.builtin.command: aideinit --yes --force
+  args:
+    creates: /var/lib/aide/aide.db
+  async: 3600
+  poll: 30

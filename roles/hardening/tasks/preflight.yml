@@ -1,0 +1,73 @@
+---
+- name: Assert this is a supported Debian release
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == 'Debian'
+      - ansible_facts['distribution_major_version'] | int >= 12
+    fail_msg: >-
+      This role supports Debian 12 (bookworm) and newer, found
+      {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}.
+    quiet: true
+
+- name: Make sure the SSH changes won't lock out the connecting user
+  when:
+    - hardening_ssh_lockout_check | bool
+    - ansible_connection | default('ssh') in ['ssh', 'paramiko', 'ansible.builtin.ssh']
+  block:
+    - name: Identify the user Ansible logs in as
+      ansible.builtin.command: id -un
+      become: false
+      changed_when: false
+      check_mode: false
+      register: hardening_login_user
+
+    - name: Look up the login user's account
+      ansible.builtin.getent:
+        database: passwd
+        key: "{{ hardening_login_user.stdout }}"
+
+    - name: Look up the login user's groups
+      ansible.builtin.command: id -nG {{ hardening_login_user.stdout }}
+      changed_when: false
+      check_mode: false
+      register: hardening_login_groups
+
+    - name: Check the login user's authorized_keys
+      ansible.builtin.stat:
+        path: "{{ ansible_facts['getent_passwd'][hardening_login_user.stdout][4] }}/.ssh/authorized_keys"
+      register: hardening_login_authorized_keys
+
+    - name: Refuse to block root login while connected as root
+      ansible.builtin.assert:
+        that: not (hardening_login_user.stdout == 'root' and hardening_ssh_permit_root_login == 'no')
+        fail_msg: >-
+          Ansible is logged in as root, and hardening_ssh_permit_root_login is "no".
+          Connect as an unprivileged sudo user, or set
+          hardening_ssh_permit_root_login to "prohibit-password".
+        quiet: true
+
+    - name: Refuse to disable password logins for a user without SSH keys
+      ansible.builtin.assert:
+        that: >-
+          hardening_ssh_password_authentication | bool
+          or (hardening_login_authorized_keys.stat.exists and hardening_login_authorized_keys.stat.size > 0)
+        fail_msg: >-
+          {{ hardening_login_user.stdout }} has no ~/.ssh/authorized_keys, and password
+          logins are about to be disabled. Install a key first, or set
+          hardening_ssh_lockout_check to false if keys come from elsewhere
+          (AuthorizedKeysCommand, certificates).
+        quiet: true
+
+    - name: Refuse an AllowUsers list that leaves out the login user
+      ansible.builtin.assert:
+        that: hardening_ssh_allow_users | length == 0 or hardening_login_user.stdout in hardening_ssh_allow_users
+        fail_msg: "{{ hardening_login_user.stdout }} is not listed in hardening_ssh_allow_users."
+        quiet: true
+
+    - name: Refuse an AllowGroups list that leaves out the login user
+      ansible.builtin.assert:
+        that: >-
+          hardening_ssh_allow_groups | length == 0
+          or hardening_login_groups.stdout.split() | intersect(hardening_ssh_allow_groups) | length > 0
+        fail_msg: "{{ hardening_login_user.stdout }} is in none of hardening_ssh_allow_groups."
+        quiet: true

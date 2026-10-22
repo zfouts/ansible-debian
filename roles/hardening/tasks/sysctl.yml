@@ -1,0 +1,13 @@
+---
+- name: Set kernel hardening parameters
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value | string }}"
+    sysctl_file: /etc/sysctl.d/99-hardening.conf
+    sysctl_set: true
+    reload: true
+  loop: "{{ hardening_sysctl_settings | combine(hardening_sysctl_forwarding) | combine(hardening_sysctl_extra) | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} = {{ item.value }}"
+  vars:
+    hardening_sysctl_forwarding: "{{ {} if hardening_sysctl_ip_forwarding | bool else {'net.ipv4.ip_forward': 0, 'net.ipv6.conf.all.forwarding': 0} }}"

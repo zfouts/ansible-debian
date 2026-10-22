@@ -1,0 +1,75 @@
+---
+- name: Install auditd
+  ansible.builtin.apt:
+    name:
+      - auditd
+      - audispd-plugins
+
+- name: Make sure auditd is enabled and running
+  ansible.builtin.systemd_service:
+    name: auditd
+    enabled: true
+    state: started
+
+# Rules can't be reloaded while the kernel has them locked (-e 2).
+- name: Check whether the audit rules are locked
+  ansible.builtin.command: auditctl -s
+  changed_when: false
+  check_mode: false
+  register: hardening_audit_status
+
+- name: Check for wtmpdb and lastlog2 databases
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /var/lib/wtmpdb
+    - /var/lib/lastlog
+  register: hardening_audit_login_dbs
+
+- name: Install the audit rules
+  ansible.builtin.template:
+    src: audit.rules.j2
+    dest: /etc/audit/rules.d/50-hardening.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Load audit rules
+
+- name: Lock the audit rules until reboot
+  ansible.builtin.copy:
+    dest: /etc/audit/rules.d/99-finalize.rules
+    content: |
+      ## Managed by Ansible
+      -e 2
+    owner: root
+    group: root
+    mode: "0640"
+  when: hardening_auditd_immutable | bool
+  notify: Load audit rules
+
+- name: Remove the audit rule lock
+  ansible.builtin.file:
+    path: /etc/audit/rules.d/99-finalize.rules
+    state: absent
+  when: not hardening_auditd_immutable | bool
+  notify: Load audit rules
+
+- name: Check for GRUB
+  ansible.builtin.stat:
+    path: /etc/default/grub
+  register: hardening_grub
+
+# Lets processes that start before auditd be audited too.
+- name: Enable auditing from early boot
+  ansible.builtin.copy:
+    dest: /etc/default/grub.d/50-hardening-audit.cfg
+    content: |
+      # Managed by Ansible
+      GRUB_CMDLINE_LINUX="$GRUB_CMDLINE_LINUX audit=1 audit_backlog_limit=8192"
+    owner: root
+    group: root
+    mode: "0644"
+  when:
+    - hardening_auditd_grub | bool
+    - hardening_grub.stat.exists
+  notify: Update GRUB

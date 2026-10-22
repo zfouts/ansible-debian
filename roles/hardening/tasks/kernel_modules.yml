@@ -1,0 +1,17 @@
+---
+# Absent on minimal images without kmod.
+- name: Create the modprobe configuration directory
+  ansible.builtin.file:
+    path: /etc/modprobe.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Prevent rarely used filesystem and protocol modules from loading
+  ansible.builtin.template:
+    src: modprobe-hardening.conf.j2
+    dest: /etc/modprobe.d/hardening.conf
+    owner: root
+    group: root
+    mode: "0644"

@@ -1,0 +1,23 @@
+---
+# Debian 12+ logs to the journal only, so fail2ban needs the systemd backend.
+- name: Install fail2ban
+  ansible.builtin.apt:
+    name:
+      - fail2ban
+      - python3-systemd
+      - nftables
+
+- name: Configure fail2ban
+  ansible.builtin.template:
+    src: fail2ban.local.j2
+    dest: /etc/fail2ban/jail.d/hardening.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Make sure fail2ban is enabled and running
+  ansible.builtin.systemd_service:
+    name: fail2ban
+    enabled: true
+    state: started

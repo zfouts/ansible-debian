@@ -1,0 +1,210 @@
+---
+# =============================================================================
+# Debian hardening role - default variables
+#
+# Every section can be toggled independently. Override these in group_vars/,
+# host_vars/ or with -e on the command line.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Packages & updates
+# -----------------------------------------------------------------------------
+hardening_upgrade_packages: true          # apt-get upgrade during the run
+hardening_unattended_upgrades: true       # automatic stable + security updates
+hardening_unattended_upgrades_reboot: false
+hardening_unattended_upgrades_reboot_time: "03:00"
+
+# Legacy / plaintext network services and clients
+hardening_remove_packages:
+  - telnet
+  - inetutils-telnet
+  - telnetd
+  - inetutils-telnetd
+  - rsh-client
+  - rsh-server
+  - rsh-redone-client
+  - nis
+  - talk
+  - talkd
+  - xinetd
+  - tftpd-hpa
+
+# Services stopped, disabled and masked if they exist on the host
+hardening_disabled_services:
+  - avahi-daemon
+  - cups
+  - cups-browsed
+
+# -----------------------------------------------------------------------------
+# SSH
+# -----------------------------------------------------------------------------
+hardening_ssh_port: 22
+hardening_ssh_permit_root_login: "no"     # "no" or "prohibit-password"
+hardening_ssh_password_authentication: false
+hardening_ssh_allow_tcp_forwarding: false
+hardening_ssh_allow_agent_forwarding: false
+hardening_ssh_x11_forwarding: false
+hardening_ssh_max_auth_tries: 4
+hardening_ssh_max_sessions: 10
+hardening_ssh_login_grace_time: 30
+hardening_ssh_client_alive_interval: 300
+hardening_ssh_client_alive_count_max: 2
+hardening_ssh_allow_users: []
+hardening_ssh_allow_groups: []
+
+# Preferred algorithms, strongest first. Anything the installed OpenSSH does
+# not support is filtered out automatically (e.g. ML-KEM on Debian 12).
+hardening_ssh_kex_algorithms:
+  - mlkem768x25519-sha256
+  - sntrup761x25519-sha512
+  - sntrup761x25519-sha512@openssh.com
+  - curve25519-sha256
+  - curve25519-sha256@libssh.org
+  - diffie-hellman-group18-sha512
+  - diffie-hellman-group16-sha512
+hardening_ssh_ciphers:
+  - chacha20-poly1305@openssh.com
+  - aes256-gcm@openssh.com
+  - aes128-gcm@openssh.com
+  - aes256-ctr
+  - aes192-ctr
+  - aes128-ctr
+hardening_ssh_macs:
+  - hmac-sha2-512-etm@openssh.com
+  - hmac-sha2-256-etm@openssh.com
+  - umac-128-etm@openssh.com
+
+# Abort before touching SSH if the settings above would lock out the user
+# Ansible is connecting as (root login, missing authorized_keys, AllowUsers).
+hardening_ssh_lockout_check: true
+
+# -----------------------------------------------------------------------------
+# Firewall (UFW)
+# -----------------------------------------------------------------------------
+hardening_firewall: true
+hardening_firewall_ssh_rate_limit: true   # ufw "limit": 6 connections / 30s per IP
+# Extra inbound rules, e.g.:
+#   - { port: 443 }
+#   - { port: 51820, proto: udp }
+#   - { port: 9100, from: 10.0.0.0/8 }
+hardening_firewall_allowed_ports: []
+
+# -----------------------------------------------------------------------------
+# fail2ban
+# -----------------------------------------------------------------------------
+hardening_fail2ban: true
+hardening_fail2ban_bantime: 1h
+hardening_fail2ban_findtime: 10m
+hardening_fail2ban_maxretry: 5
+hardening_fail2ban_ignoreip:
+  - 127.0.0.1/8
+  - "::1"
+
+# -----------------------------------------------------------------------------
+# Kernel
+# -----------------------------------------------------------------------------
+hardening_sysctl: true
+# Set to true on hosts that must forward packets (routers, VPN gateways,
+# Docker/Kubernetes nodes). Otherwise IP forwarding is disabled.
+hardening_sysctl_ip_forwarding: false
+hardening_sysctl_settings:
+  # Kernel self-protection
+  kernel.randomize_va_space: 2
+  kernel.kptr_restrict: 2
+  kernel.dmesg_restrict: 1
+  kernel.yama.ptrace_scope: 1
+  kernel.sysrq: 0
+  kernel.unprivileged_bpf_disabled: 1
+  net.core.bpf_jit_harden: 2
+  # Filesystem
+  fs.protected_hardlinks: 1
+  fs.protected_symlinks: 1
+  fs.protected_fifos: 2
+  fs.protected_regular: 2
+  fs.suid_dumpable: 0
+  # Network
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.default.accept_redirects: 0
+  net.ipv6.conf.all.accept_redirects: 0
+  net.ipv6.conf.default.accept_redirects: 0
+  net.ipv4.conf.all.secure_redirects: 0
+  net.ipv4.conf.default.secure_redirects: 0
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.default.send_redirects: 0
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.default.accept_source_route: 0
+  net.ipv6.conf.all.accept_source_route: 0
+  net.ipv6.conf.default.accept_source_route: 0
+  net.ipv4.conf.all.log_martians: 1
+  net.ipv4.conf.default.log_martians: 1
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.rp_filter: 1
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  net.ipv4.icmp_ignore_bogus_error_responses: 1
+  net.ipv4.tcp_syncookies: 1
+# Merged over the settings above; use it to add or override keys.
+hardening_sysctl_extra: {}
+
+# Kernel modules that can't be loaded. udf (Azure provisioning), squashfs
+# (snaps) and usb-storage are left out on purpose; add them if you don't need them.
+hardening_blacklisted_modules:
+  - cramfs
+  - freevxfs
+  - hfs
+  - hfsplus
+  - jffs2
+  - dccp
+  - rds
+  - sctp
+  - tipc
+
+# -----------------------------------------------------------------------------
+# Filesystem
+# -----------------------------------------------------------------------------
+hardening_dev_shm_noexec: true            # mount /dev/shm nodev,nosuid,noexec
+hardening_disable_core_dumps: true
+
+# -----------------------------------------------------------------------------
+# Accounts & authentication
+# -----------------------------------------------------------------------------
+# On Debian 13, pam_umask honours USERGROUPS_ENAB, so users whose primary group
+# is their own private group get 007 instead (the group only contains them).
+hardening_umask: "027"
+hardening_password_min_days: 1
+hardening_password_warn_age: 7
+# Debian's default (99999) is kept deliberately: an expired password blocks
+# SSH key logins too, which can lock out key-only accounts a year from now.
+hardening_password_max_days: 99999
+
+hardening_pwquality_minlen: 14
+hardening_pwquality_minclass: 3
+
+hardening_faillock: true
+hardening_faillock_deny: 5
+hardening_faillock_unlock_time: 900       # seconds
+hardening_faillock_fail_interval: 900     # seconds
+
+hardening_restrict_su: true
+hardening_su_group: sudo                  # only members of this group may use su
+
+hardening_sudo_logfile: /var/log/sudo.log
+
+hardening_banner: |
+  Authorized access only. All activity on this system may be monitored and
+  recorded. Disconnect now if you are not an authorized user.
+
+# -----------------------------------------------------------------------------
+# Auditing & logging
+# -----------------------------------------------------------------------------
+hardening_auditd: true
+# Lock audit rules until the next reboot (-e 2). Rule changes made by later
+# runs will then only take effect after a reboot.
+hardening_auditd_immutable: false
+# Add audit=1 audit_backlog_limit=8192 to the kernel command line (needs a reboot).
+hardening_auditd_grub: true
+
+hardening_journald_persistent: true
+
+# File integrity monitoring. The initial database build can take a long time
+# on large filesystems, so it is opt-in.
+hardening_aide: false

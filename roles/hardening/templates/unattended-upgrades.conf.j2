@@ -1,0 +1,7 @@
+// {{ ansible_managed }}
+// Overrides 50unattended-upgrades, whose stock origins (the stable point
+// releases and the security archive) are left as they are.
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Automatic-Reboot "{{ 'true' if hardening_unattended_upgrades_reboot | bool else 'false' }}";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ hardening_unattended_upgrades_reboot_time }}";
+Unattended-Upgrade::SyslogEnable "true";

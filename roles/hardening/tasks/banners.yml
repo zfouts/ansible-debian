@@ -1,0 +1,12 @@
+---
+# Replaces the stock banners, which advertise the OS release.
+- name: Set the login banners
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    content: "{{ hardening_banner }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - /etc/issue
+    - /etc/issue.net
